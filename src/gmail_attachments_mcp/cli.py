@@ -8,7 +8,7 @@ import logging
 import os
 import sys
 
-from .auth import DEFAULT_CLIENT_SECRET, DEFAULT_TOKEN, authorize, load_session
+from .auth import DEFAULT_CLIENT_SECRET, DEFAULT_TOKEN, LazySession, authorize, load_session
 from .gmail import API, DEFAULT_ATTACHMENTS_DIR, Downloader
 
 
@@ -44,7 +44,10 @@ def main(argv: list[str] | None = None) -> None:
             print(f"Authorized {email}. Token saved to {os.path.expanduser(args.token)}")
             return
 
-        downloader = Downloader(load_session(args.token), args.attachments_dir)
+        if args.cmd == "serve" and not os.path.exists(os.path.expanduser(args.token)):
+            logging.warning("No Gmail token at %s yet; download_attachment will fail until you "
+                            "run `gmail-attachments-mcp auth`.", args.token)
+        downloader = Downloader(LazySession(args.token), args.attachments_dir)
         if args.cmd == "download":
             print(json.dumps(downloader.download(args.message, args.attachment), indent=2,
                              ensure_ascii=False))

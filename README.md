@@ -55,6 +55,10 @@ You need a Google Cloud OAuth client. This is a one-time setup:
 While the OAuth app is in **testing** status, Google expires refresh tokens after 7 days. When
 calls start failing with an auth error, run `auth` again, or publish the app to stop the expiry.
 
+`serve` starts without a token, so you can register the server before authorizing. Until you
+authorize, the tool returns an error telling you to run `auth`. The server re-reads the token
+whenever the file changes, so re-running `auth` takes effect without a restart.
+
 ## Use with Claude Code
 
 ```sh

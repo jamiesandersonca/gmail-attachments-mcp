@@ -51,6 +51,29 @@ def load_session(token_path: str) -> AuthorizedSession:
     return AuthorizedSession(creds)
 
 
+class LazySession:
+    """Loads the token on first use rather than at startup, so the server can run before `auth`.
+
+    Reloads whenever the token file changes, so re-running `auth` takes effect without a restart.
+    """
+
+    def __init__(self, token_path: str):
+        self.token_path = token_path
+        self._session: AuthorizedSession | None = None
+        self._mtime: int | None = None
+
+    def get(self, *args, **kwargs):
+        try:
+            mtime = os.stat(os.path.expanduser(self.token_path)).st_mtime_ns
+        except OSError:
+            mtime = None
+        if self._session is None or mtime != self._mtime:
+            self._session = load_session(self.token_path)
+            # Re-stat: loading may refresh and rewrite the token.
+            self._mtime = os.stat(os.path.expanduser(self.token_path)).st_mtime_ns
+        return self._session.get(*args, **kwargs)
+
+
 def _save(creds: Credentials, token_path: str) -> None:
     path = os.path.expanduser(token_path)
     os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
