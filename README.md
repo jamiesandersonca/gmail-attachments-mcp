@@ -31,6 +31,19 @@ names, unless two names in the message clash ignoring case or a name is missing.
 the name becomes `part<partId>-<name>` or `part<partId>.<ext>`. Repeat requests reuse the saved
 file when its contents still match.
 
+## Install
+
+Install the command with [uv](https://docs.astral.sh/uv/). This puts `gmail-attachments-mcp` on
+your PATH (in `~/.local/bin`), in its own isolated environment, independent of any checkout:
+
+```sh
+uv tool install git+https://github.com/jamiesandersonca/gmail-attachments-mcp
+```
+
+Upgrade later with `uv tool upgrade gmail-attachments-mcp`. When working on the code, install
+from your checkout instead so edits take effect immediately:
+`uv tool install --editable /path/to/gmail-attachments-mcp`.
+
 ## Setup
 
 You need a Google Cloud OAuth client. This is a one-time setup:
@@ -50,8 +63,7 @@ You need a Google Cloud OAuth client. This is a one-time setup:
 5. Authorize with the **same account the Gmail connector uses**:
 
    ```sh
-   uv sync
-   uv run gmail-attachments-mcp auth
+   gmail-attachments-mcp auth
    ```
 
    This opens a browser for consent and requests the `gmail.readonly` scope. Google warns that it
@@ -92,24 +104,16 @@ This repo's `docs/` provides them (see [Project site](#project-site)). To use yo
 
 ## Use with Claude Code
 
-Run it from a checkout:
-
 ```sh
-claude mcp add gmail-attachments --scope user -- \
-  uv --directory /path/to/gmail-attachments-mcp run gmail-attachments-mcp serve
-```
-
-Or install it as a tool, and reinstall with `--reinstall` after pulling changes:
-
-```sh
-uv tool install /path/to/gmail-attachments-mcp
 claude mcp add gmail-attachments --scope user -- gmail-attachments-mcp serve
 ```
+
+Restart Claude Code after `uv tool upgrade` so it starts the new version.
 
 ## CLI
 
 ```sh
-uv run gmail-attachments-mcp download 1a0000000000000a [--attachment 1]
+gmail-attachments-mcp download 1a0000000000000a [--attachment 1]
 ```
 
 ## Security notes
@@ -129,6 +133,7 @@ and terms that the Google OAuth consent screen links to.
 ## Development
 
 ```sh
+uv sync
 uv run pytest
 ```
 
