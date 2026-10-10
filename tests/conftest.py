@@ -30,7 +30,7 @@ def leaf(part_id, filename, mime, data, inline=False):
 
 MESSAGES = {
     # One PDF, like the connector's typical invoice mail.
-    "1a11b81ba2900752": {"mimeType": "multipart/mixed", "partId": "", "parts": [
+    "1a0000000000000a": {"mimeType": "multipart/mixed", "partId": "", "parts": [
         {"partId": "0", "mimeType": "text/plain", "filename": "", "body": {"size": 5, "data": b64(b"hello")}},
         leaf("1", "invoice.pdf", "application/pdf", PDF),
     ]},

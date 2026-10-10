@@ -34,7 +34,7 @@ def test_tool_surface(downloader):
 
 def test_tool_call_saves_file(downloader):
     result = _call(downloader, "download_attachment",
-                   {"messageId": "1a11b81ba2900752", "attachmentId": "1"})
+                   {"messageId": "1a0000000000000a", "attachmentId": "1"})
     assert not result.is_error, _text(result)
     (att,) = json.loads(_text(result))["attachments"]
     with open(att["path"], "rb") as f:
@@ -43,7 +43,7 @@ def test_tool_call_saves_file(downloader):
 
 def test_user_errors_surface_their_message(downloader):
     result = _call(downloader, "download_attachment",
-                   {"messageId": "1a11b81ba2900752", "attachmentId": "7"})
+                   {"messageId": "1a0000000000000a", "attachmentId": "7"})
     assert result.is_error and "Pass a partId instead" in _text(result)
 
 
@@ -52,5 +52,5 @@ def test_unexpected_errors_do_not_leak_details(downloader, monkeypatch):
         raise RuntimeError("disk error at /private/secret/path")
 
     monkeypatch.setattr(downloader, "download", crash)
-    result = _call(downloader, "download_attachment", {"messageId": "1a11b81ba2900752"})
+    result = _call(downloader, "download_attachment", {"messageId": "1a0000000000000a"})
     assert result.is_error and "/private/secret" not in _text(result)

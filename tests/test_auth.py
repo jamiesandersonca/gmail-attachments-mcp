@@ -13,7 +13,7 @@ from .test_server import _call, _text
 def test_server_starts_without_a_token_and_the_tool_says_how_to_fix_it(tmp_path):
     downloader = Downloader(LazySession(str(tmp_path / "token.json")), str(tmp_path / "out"))
     build_server(downloader)  # no token needed to build or list tools
-    result = _call(downloader, "download_attachment", {"messageId": "1a11b81ba2900752"})
+    result = _call(downloader, "download_attachment", {"messageId": "1a0000000000000a"})
     assert result.is_error and "Run `gmail-attachments-mcp auth` first" in _text(result)
 
 

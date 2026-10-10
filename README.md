@@ -5,9 +5,8 @@ Gmail account to local files. The Gmail connector can search mail and list attac
 can't fetch them. This server fills that gap, and you keep using the connector for everything
 else.
 
-It is the live-mail counterpart of
-[gmail-takeout-mcp](https://github.com/jamiesandersonca/gmail-takeout-mcp)'s `download_attachment`,
-and it saves files the same way.
+It is the live-mail counterpart of the `download_attachment` tool in gmail-takeout-mcp (a
+companion server for Google Takeout archives), and it saves files the same way.
 
 ## How it fits with the connector
 
@@ -69,7 +68,7 @@ claude mcp add gmail-attachments --scope user -- \
 ## CLI
 
 ```sh
-uv run gmail-attachments-mcp download 1a11b81ba2900752 [--attachment 1]
+uv run gmail-attachments-mcp download 1a0000000000000a [--attachment 1]
 ```
 
 ## Security notes
@@ -79,6 +78,12 @@ uv run gmail-attachments-mcp download 1a11b81ba2900752 [--attachment 1]
 - Attachment names and contents come from the sender, so treat them as untrusted. The server's
   MCP instructions tell the model the same. Filenames are reduced to safe basenames, and writes
   never follow symlinks planted in the attachments directory.
+
+## Project site
+
+`docs/` is published with GitHub Pages at
+<https://jamiesandersonca.github.io/gmail-attachments-mcp/>. It holds the home page, privacy policy
+and terms that the Google OAuth consent screen links to.
 
 ## Development
 

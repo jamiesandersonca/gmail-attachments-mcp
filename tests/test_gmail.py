@@ -7,7 +7,7 @@ from gmail_attachments_mcp.gmail import NotFound, normalize_message_id
 
 from .conftest import CSV, CSV2, PDF, PNG
 
-INVOICE = "1a11b81ba2900752"
+INVOICE = "1a0000000000000a"
 MULTI = "1a0000000000000b"
 
 
@@ -95,5 +95,5 @@ def test_errors(downloader, message_id, attachment_id, error):
 
 
 def test_normalize_message_id():
-    assert normalize_message_id(" 1A11B81BA2900752 ") == "1a11b81ba2900752"
-    assert normalize_message_id("1878484948421183314") == "1a11b81ba2900752"
+    assert normalize_message_id(" 1A0000000000000A ") == "1a0000000000000a"
+    assert normalize_message_id("1873497444986126346") == "1a0000000000000a"
