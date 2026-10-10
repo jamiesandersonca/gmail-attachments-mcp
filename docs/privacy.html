@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy</title>
+  <meta name="description" content="Privacy policy for Mail Attachments MCP.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="lede">Mail Attachments MCP · Last updated 10 October 2026</p>
+
+  <p>Mail Attachments MCP ("the app") is open-source software that runs entirely on your own
+    computer. This policy explains what Google user data it accesses and what it does with it.</p>
+
+  <h2>Data the app accesses</h2>
+  <p>With your permission, the app uses the Gmail API with the read-only scope
+    (<code>https://www.googleapis.com/auth/gmail.readonly</code>). It reads only what it needs to
+    save an attachment you ask for: the structure of that message (its parts, filenames, types and
+    sizes) and the attachment's contents.</p>
+
+  <h2>How the data is used</h2>
+  <p>The app saves the requested attachment to a folder on your computer
+    (<code>~/.cache/gmail-attachments-mcp/attachments/</code> by default), readable only by your
+    user account, so that you or an AI assistant you run can open it. It doesn't read, index or copy
+    any other mail.</p>
+
+  <h2>Storage and sharing</h2>
+  <ul>
+    <li>Your Google sign-in token and the attachments you save stay on your computer. They are
+      never sent to the developer or to any other server; the app talks only to Google's APIs.</li>
+    <li>The app has no analytics, tracking or advertising, and the developer collects no data.</li>
+    <li>Anything you then share with an AI assistant is governed by that assistant's own privacy
+      policy.</li>
+  </ul>
+
+  <h2>Google API Services User Data Policy</h2>
+  <p>The app's use and transfer of information received from Google APIs adheres to the
+    <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services
+    User Data Policy</a>, including the Limited Use requirements.</p>
+
+  <h2>Removing access and data</h2>
+  <p>You can revoke the app's access at any time from your Google Account, under
+    <a href="https://myaccount.google.com/connections">Your connections to third-party apps</a>.
+    To delete the data it stored, delete the folder <code>~/.config/gmail-attachments-mcp/</code>
+    (your sign-in token) and <code>~/.cache/gmail-attachments-mcp/</code> (saved attachments).</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy can be raised as an
+    <a href="https://github.com/jamiesandersonca/gmail-attachments-mcp/issues">issue on GitHub</a>.</p>
+
+  <footer>
+    <a href="index.html">Home</a>
+    <a href="terms.html">Terms of service</a>
+  </footer>
+</main>
+</body>
+</html>

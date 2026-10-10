@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mail Attachments MCP</title>
+  <meta name="description" content="A local MCP server that saves Gmail attachments to files so an AI assistant can read them.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>Mail Attachments MCP</h1>
+  <p class="lede">A small server that runs on your own computer and saves email attachments from
+    your Gmail account to local files, so an AI assistant such as Claude can read them.</p>
+
+  <h2>What it does</h2>
+  <p>Gmail integrations for AI assistants can search mail and list attachments, but often can't
+    open them. Mail Attachments MCP adds the missing step. When you ask your assistant to look at
+    an attachment, it calls this server with the message and attachment, and the server saves that
+    file to a private folder on your computer.</p>
+  <ul>
+    <li><strong>Read-only:</strong> it asks Google only for permission to read mail, and it never
+      sends, changes or deletes anything in your account.</li>
+    <li><strong>Local:</strong> it runs on your machine. Your mail and your Google sign-in are
+      never sent to the developer or to any other service.</li>
+    <li><strong>On request:</strong> it fetches only the attachments you or your assistant ask
+      for. It doesn't scan or copy your mailbox.</li>
+  </ul>
+
+  <h2>Get it</h2>
+  <p>The source code, setup steps and documentation are on GitHub:
+    <a href="https://github.com/jamiesandersonca/gmail-attachments-mcp">jamiesandersonca/gmail-attachments-mcp</a>.</p>
+
+  <footer>
+    <a href="privacy.html">Privacy policy</a>
+    <a href="terms.html">Terms of service</a>
+    <a href="https://github.com/jamiesandersonca/gmail-attachments-mcp/issues">Contact</a>
+  </footer>
+</main>
+</body>
+</html>
