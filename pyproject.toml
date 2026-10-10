@@ -1,0 +1,24 @@
+[project]
+name = "gmail-attachments-mcp"
+version = "0.1.0"
+description = "Local MCP server that downloads Gmail attachments, to complement the Gmail connector"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=2.2,<3",
+    "google-auth[requests]>=2.30",
+    "google-auth-oauthlib>=1.2",
+]
+
+[project.scripts]
+gmail-attachments-mcp = "gmail_attachments_mcp.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gmail_attachments_mcp"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
