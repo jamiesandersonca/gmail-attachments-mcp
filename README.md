@@ -27,8 +27,8 @@ Omit `attachmentId` to save every attachment of the message.
 
 Files are saved to `~/.cache/gmail-attachments-mcp/attachments/<messageId>/` with owner-only
 permissions. You can change the location with `--attachments-dir`. Files keep their original
-names, except that characters other than letters, digits, spaces and `.,+=@()[]-` become `_`. If
-two names in the message clash ignoring case or a name is missing, the name becomes
+names, except that spaces and any other characters besides letters, digits and `.,+=@()[]-`
+become `_`. If two names in the message clash ignoring case or a name is missing, the name becomes
 `part<partId>-<name>` or `part<partId>.<ext>`. On macOS each file is quarantined like a Mail
 attachment, so Gatekeeper checks it before it opens. Repeat requests reuse the saved file when its
 contents still match.
@@ -124,8 +124,8 @@ gmail-attachments-mcp download 1a0000000000000a [--attachment 1]
   writes to Gmail.
 - Attachment names and contents come from the sender, so treat them as untrusted. The server's
   MCP instructions tell the model the same. Filenames are reduced to basenames without shell
-  metacharacters or invisible formatting characters, since saved paths often end up in shell
-  commands. Writes never follow symlinks planted in the attachments directory.
+  metacharacters, whitespace or invisible formatting characters, since saved paths often end up
+  in shell commands. Writes never follow symlinks planted in the attachments directory.
 
 ## Project site
 
