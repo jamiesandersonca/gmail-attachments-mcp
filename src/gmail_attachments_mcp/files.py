@@ -5,18 +5,35 @@ Adapted from gmail-takeout-mcp so both servers save files the same way.
 
 from __future__ import annotations
 
+import ctypes
 import mimetypes
 import os
 import re
 import secrets
 import stat
+import sys
+import time
+import unicodedata
 
-_UNSAFE_FILENAME_RE = re.compile(r'[\x00-\x1f\x7f/\\:*?"<>|]+')
+# Anything but letters, digits and a few punctuation marks. Saved paths end up in shell commands,
+# so `$`, backticks, `;`, `&`, quotes and the like must not survive; nor must invisible formatting
+# characters such as right-to-left overrides, which can disguise an extension.
+_UNSAFE_FILENAME_RE = re.compile(r"[^\w .,+=@()\[\]-]+")
+
+_QUARANTINE = b"com.apple.quarantine"
+_AGENT = "gmail-attachments-mcp"
+if sys.platform == "darwin":
+    _libc = ctypes.CDLL(None, use_errno=True)
+    _libc.fsetxattr.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_size_t,
+                                ctypes.c_uint32, ctypes.c_int]
+    _libc.fgetxattr.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_size_t,
+                                ctypes.c_uint32, ctypes.c_int]
+    _libc.fgetxattr.restype = ctypes.c_ssize_t
 
 
 def safe_filename(name: str | None, fallback: str, mime_type: str) -> str:
     """A filesystem-safe basename for an attachment (never a path)."""
-    name = (name or "").replace("\\", "/").rsplit("/", 1)[-1]
+    name = unicodedata.normalize("NFC", name or "").replace("\\", "/").rsplit("/", 1)[-1]
     name = _UNSAFE_FILENAME_RE.sub("_", name).strip().lstrip(".").strip()
     if not name or name == "noname":
         return fallback + (mimetypes.guess_extension(mime_type) or "")
@@ -24,6 +41,18 @@ def safe_filename(name: str | None, fallback: str, mime_type: str) -> str:
         stem, dot, ext = name.rpartition(".")
         name = stem[: 200 - len(ext) - 1] + dot + ext if dot and len(ext) <= 10 else name[:200]
     return name
+
+
+def quarantine(fd: int) -> None:
+    """Mark a saved file as downloaded, as Mail does, so macOS checks it (Gatekeeper) before it
+    opens. Best effort: a filesystem without extended attributes just goes unmarked."""
+    if sys.platform == "darwin":
+        value = f"0081;{int(time.time()):08x};{_AGENT};".encode()
+        _libc.fsetxattr(fd, _QUARANTINE, value, len(value), 0, 0)
+
+
+def is_quarantined(fd: int) -> bool:
+    return sys.platform != "darwin" or _libc.fgetxattr(fd, _QUARANTINE, None, 0, 0, 0) >= 0
 
 
 def open_private_dir(path: str) -> int:
@@ -44,7 +73,7 @@ def open_private_dir(path: str) -> int:
 
 
 def has_content(dir_fd: int, name: str, data: bytes) -> bool:
-    """Whether `name` is already our private regular file holding exactly `data`."""
+    """Whether `name` is already our private, quarantined regular file holding exactly `data`."""
     try:
         # O_NOFOLLOW rejects symlinks; O_NONBLOCK keeps a planted FIFO from hanging the open.
         fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dir_fd)
@@ -54,7 +83,7 @@ def has_content(dir_fd: int, name: str, data: bytes) -> bool:
         st = os.fstat(fd)
         return (stat.S_ISREG(st.st_mode) and st.st_uid == os.getuid()
                 and stat.S_IMODE(st.st_mode) == 0o600 and st.st_size == len(data)
-                and f.read() == data)
+                and is_quarantined(fd) and f.read() == data)
 
 
 def write_atomic(dir_fd: int, name: str, data: bytes) -> None:
@@ -65,6 +94,7 @@ def write_atomic(dir_fd: int, name: str, data: bytes) -> None:
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(data)
+            quarantine(fd)
         os.rename(tmp, name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
     except BaseException:
         try:
