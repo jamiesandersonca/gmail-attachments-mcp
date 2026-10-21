@@ -8,6 +8,8 @@ from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import AuthorizedSession, Request
 from google.oauth2.credentials import Credentials
 
+from .files import write_atomic
+
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 CONFIG_DIR = "~/.config/gmail-attachments-mcp"
 DEFAULT_CLIENT_SECRET = f"{CONFIG_DIR}/client_secret.json"
@@ -76,8 +78,12 @@ class LazySession:
 
 def _save(creds: Credentials, token_path: str) -> None:
     path = os.path.expanduser(token_path)
-    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
-        f.write(creds.to_json())
-    os.chmod(path, 0o600)
+    parent = os.path.dirname(path) or "."
+    os.makedirs(parent, mode=0o700, exist_ok=True)
+    dir_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        # Renaming a fresh owner-only file into place means a concurrent refresh never leaves a
+        # half-written token, and a symlink at the token path is replaced rather than followed.
+        write_atomic(dir_fd, os.path.basename(path), creds.to_json().encode(), downloaded=False)
+    finally:
+        os.close(dir_fd)

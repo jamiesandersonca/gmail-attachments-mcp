@@ -86,15 +86,16 @@ def has_content(dir_fd: int, name: str, data: bytes) -> bool:
                 and is_quarantined(fd) and f.read() == data)
 
 
-def write_atomic(dir_fd: int, name: str, data: bytes) -> None:
+def write_atomic(dir_fd: int, name: str, data: bytes, downloaded: bool = True) -> None:
     """Write `data` to a fresh temp file and rename it over `name`, replacing (never following)
-    whatever is there."""
+    whatever is there. `downloaded` files are quarantined."""
     tmp = f".{secrets.token_hex(8)}.tmp"
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=dir_fd)
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(data)
-            quarantine(fd)
+            if downloaded:
+                quarantine(fd)
         os.rename(tmp, name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
     except BaseException:
         try:

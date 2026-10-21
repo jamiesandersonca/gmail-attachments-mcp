@@ -22,7 +22,8 @@ uv run gmail-attachments-mcp serve              # MCP over stdio
 
 ## Architecture
 
-- **`auth.py`**: OAuth installed-app flow and token loading/refresh. Token files are written `0600`.
+- **`auth.py`**: OAuth installed-app flow and token loading/refresh. Tokens are written `0600` with
+  `files.write_atomic` (not quarantined).
 - **`gmail.py`**: `Downloader` calls `messages.get` (format=full) to list attachment parts, then
   `messages.attachments.get`, or decodes inline `body.data`. Gmail issues **new attachment IDs on
   every `messages.get`**, so an ID from the connector won't match. `attachmentId` therefore accepts a

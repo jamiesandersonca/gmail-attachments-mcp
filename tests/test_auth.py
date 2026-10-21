@@ -1,9 +1,12 @@
 import os
+import stat
+import sys
 
 import pytest
 
 from gmail_attachments_mcp import auth
 from gmail_attachments_mcp.auth import AuthError, LazySession
+from gmail_attachments_mcp.files import is_quarantined
 from gmail_attachments_mcp.gmail import Downloader
 from gmail_attachments_mcp.server import build_server
 
@@ -41,3 +44,32 @@ def test_session_loads_once_and_reloads_when_the_token_changes(tmp_path, monkeyp
 def test_missing_token_is_an_auth_error(tmp_path):
     with pytest.raises(AuthError, match="auth"):
         LazySession(str(tmp_path / "token.json")).get("https://example")
+
+
+class _Creds:
+    def to_json(self):
+        return '{"token": "new"}'
+
+
+def test_token_is_saved_owner_only_without_quarantine(tmp_path):
+    token = tmp_path / "config" / "token.json"
+    auth._save(_Creds(), str(token))
+    assert token.read_text() == '{"token": "new"}'
+    assert stat.S_IMODE(os.stat(token).st_mode) == 0o600
+    assert stat.S_IMODE(os.stat(token.parent).st_mode) == 0o700
+    fd = os.open(token, os.O_RDONLY)
+    try:
+        assert sys.platform != "darwin" or not is_quarantined(fd)
+    finally:
+        os.close(fd)
+
+
+def test_token_save_replaces_a_symlink_instead_of_following_it(tmp_path):
+    victim = tmp_path / "victim"
+    victim.write_text("precious")
+    token = tmp_path / "token.json"
+    token.symlink_to(victim)
+    auth._save(_Creds(), str(token))
+    assert victim.read_text() == "precious"
+    assert not token.is_symlink() and token.read_text() == '{"token": "new"}'
+    assert [p.name for p in tmp_path.iterdir() if p.name.endswith(".tmp")] == []
