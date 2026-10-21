@@ -6,6 +6,7 @@ Adapted from gmail-takeout-mcp so both servers save files the same way.
 from __future__ import annotations
 
 import ctypes
+import json
 import mimetypes
 import os
 import re
@@ -13,13 +14,12 @@ import secrets
 import stat
 import sys
 import time
-import unicodedata
 
-# Anything but letters, digits and a few punctuation marks. Saved paths end up in shell commands,
-# so `$`, backticks, `;`, `&`, quotes and the like must not survive, nor whitespace, which splits an
-# unquoted path into extra arguments; nor must invisible formatting characters such as
-# right-to-left overrides, which can disguise an extension.
-_UNSAFE_FILENAME_RE = re.compile(r"[^\w.,+=@()\[\]-]+")
+# Saved paths end up in shell commands, and the sender picks the filename, so none of it goes into
+# the path except an extension made only of these characters.
+_EXTENSION_RE = re.compile(r"[a-z0-9]{1,10}")
+# Lists each saved name's original filename, since the names on disk don't carry it.
+INDEX_NAME = "filenames.json"
 
 _QUARANTINE = b"com.apple.quarantine"
 _AGENT = "gmail-attachments-mcp"
@@ -32,24 +32,36 @@ if sys.platform == "darwin":
     _libc.fgetxattr.restype = ctypes.c_ssize_t
 
 
-def safe_filename(name: str | None, fallback: str, mime_type: str) -> str:
-    """A filesystem-safe basename for an attachment (never a path)."""
-    name = unicodedata.normalize("NFC", name or "").replace("\\", "/").rsplit("/", 1)[-1]
-    name = _UNSAFE_FILENAME_RE.sub("_", name.strip()).lstrip(".")
-    if not name or name == "noname":
-        return fallback + (mimetypes.guess_extension(mime_type) or "")
-    if len(name) > 200:
-        stem, dot, ext = name.rpartition(".")
-        name = stem[: 200 - len(ext) - 1] + dot + ext if dot and len(ext) <= 10 else name[:200]
-    return name
+class QuarantineError(ValueError):
+    pass
+
+
+def attachment_name(stem: str, filename: str | None, mime_type: str) -> str:
+    """`stem` plus the attachment's extension: the one in its filename if that is plain letters
+    and digits, else one guessed from its MIME type, else none."""
+    _, dot, ext = (filename or "").replace("\\", "/").rsplit("/", 1)[-1].rpartition(".")
+    ext = ext.lower() if dot else ""
+    if not _EXTENSION_RE.fullmatch(ext):
+        ext = (mimetypes.guess_extension(mime_type) or "").removeprefix(".")
+    return f"{stem}.{ext}" if _EXTENSION_RE.fullmatch(ext) else stem
+
+
+def index_json(filenames: dict[str, str | None]) -> bytes:
+    """The contents of INDEX_NAME: each saved name mapped to its original filename."""
+    return json.dumps(filenames, indent=2, ensure_ascii=False).encode() + b"\n"
 
 
 def quarantine(fd: int) -> None:
     """Mark a saved file as downloaded, as Mail does, so macOS checks it (Gatekeeper) before it
-    opens. Best effort: a filesystem without extended attributes just goes unmarked."""
+    opens. Raises QuarantineError where the filesystem can't hold the mark, rather than leaving
+    the file unprotected."""
     if sys.platform == "darwin":
         value = f"0081;{int(time.time()):08x};{_AGENT};".encode()
-        _libc.fsetxattr(fd, _QUARANTINE, value, len(value), 0, 0)
+        if _libc.fsetxattr(fd, _QUARANTINE, value, len(value), 0, 0) != 0:
+            raise QuarantineError(
+                f"Couldn't quarantine the saved attachment ({os.strerror(ctypes.get_errno())}). "
+                "Choose an --attachments-dir on a disk that supports extended attributes."
+            )
 
 
 def is_quarantined(fd: int) -> bool:

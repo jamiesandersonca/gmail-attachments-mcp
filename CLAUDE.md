@@ -30,6 +30,8 @@ uv run gmail-attachments-mcp serve              # MCP over stdio
   `partId` (stable, preferred). An unmatched ID is fetched directly and mapped to a part by size,
   then by content.
 - **`files.py`**: private-directory, symlink-safe, atomic file writes (copied from gmail-takeout-mcp).
+  Saved names are `part<partId>.<ext>`; the sender's filename never reaches the path (it goes in
+  `filenames.json`). Quarantine failure raises rather than leaving a file unmarked.
 - **`server.py`**: thin MCP layer; `ValueError` subclasses become `ToolError`.
 - **`cli.py`**: stdout carries MCP traffic, so logging goes to stderr.
 

@@ -26,16 +26,21 @@ Message IDs are the same hex IDs the connector returns. The decimal form also wo
 Omit `attachmentId` to save every attachment of the message.
 
 Files are saved to `~/.cache/gmail-attachments-mcp/attachments/<messageId>/` with owner-only
-permissions. You can change the location with `--attachments-dir`. Files keep their original
-names, except that spaces and any other characters besides letters, digits and `.,+=@()[]-`
-become `_`. If two names in the message clash ignoring case or a name is missing, the name becomes
-`part<partId>-<name>` or `part<partId>.<ext>`. On macOS each file is quarantined like a Mail
-attachment, so Gatekeeper checks it before it opens. Repeat requests reuse the saved file when its
-contents still match.
+permissions. You can change the location with `--attachments-dir`. Each file is named
+`part<partId>.<ext>` (e.g. `part1.pdf`), with the extension taken from the original filename if
+it is plain letters and digits, or else from the MIME type. The sender's filename never goes
+into the path, because saved paths often end up in shell commands. The response's `filename`
+gives the original name, and `filenames.json` in the same folder maps each saved name to it.
+Repeat requests reuse the saved file when its contents still match.
+
+On macOS each file is quarantined like a Mail attachment, so Gatekeeper checks it before it
+opens. If the attachments directory is on a disk that can't hold the quarantine mark, the
+download fails rather than saving an unmarked file.
 
 ## Install
 
-Install the command with [uv](https://docs.astral.sh/uv/). This puts `gmail-attachments-mcp` on
+Runs on macOS and Linux; Windows isn't supported. Install the command with
+[uv](https://docs.astral.sh/uv/). This puts `gmail-attachments-mcp` on
 your PATH (in `~/.local/bin`), in its own isolated environment, independent of any checkout:
 
 ```sh
@@ -123,9 +128,9 @@ gmail-attachments-mcp download 1a0000000000000a [--attachment 1]
 - The token can read all of your mail. It lives only on this machine, and the server never
   writes to Gmail.
 - Attachment names and contents come from the sender, so treat them as untrusted. The server's
-  MCP instructions tell the model the same. Filenames are reduced to basenames without shell
-  metacharacters, whitespace or invisible formatting characters, since saved paths often end up
-  in shell commands. Writes never follow symlinks planted in the attachments directory.
+  MCP instructions tell the model the same. Saved paths are built from Gmail's IDs, not the
+  sender's filename, since they often end up in shell commands. Writes never follow symlinks
+  planted in the attachments directory.
 
 ## Project site
 

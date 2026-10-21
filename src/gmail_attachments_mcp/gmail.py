@@ -11,7 +11,14 @@ from urllib.parse import quote
 from google.auth.exceptions import RefreshError
 
 from .auth import AuthError
-from .files import has_content, open_private_dir, safe_filename, write_atomic
+from .files import (
+    INDEX_NAME,
+    attachment_name,
+    has_content,
+    index_json,
+    open_private_dir,
+    write_atomic,
+)
 
 API = "https://gmail.googleapis.com/gmail/v1/users/me"
 DEFAULT_ATTACHMENTS_DIR = "~/.cache/gmail-attachments-mcp/attachments"
@@ -19,7 +26,7 @@ TIMEOUT = 60
 
 _HEX_ID_RE = re.compile(r"[0-9a-f]{1,32}")
 _ATTACHMENT_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
-_PREFIXED_NAME_RE = re.compile(r"part[\d.]+-", re.I)
+_PART_ID_RE = re.compile(r"[\d.]*")
 
 
 class NotFound(ValueError):
@@ -125,6 +132,9 @@ class Downloader:
         dir_fd = open_private_dir(msg_dir)
         saved = []
         try:
+            index = index_json({names[p.part_id]: p.filename or None for p in all_parts})
+            if not has_content(dir_fd, INDEX_NAME, index):
+                write_atomic(dir_fd, INDEX_NAME, index)
             for part in parts:
                 data = prefetched.get(part.part_id)
                 if data is None:
@@ -172,18 +182,13 @@ def _b64(s: str) -> bytes:
 
 
 def _attachment_names(parts: list[Part]) -> dict[str, str]:
-    """Map each partId to a distinct on-disk name, the same whichever parts get saved.
-
-    A name is kept as-is when no other part's name matches it case-insensitively (macOS
-    filesystems ignore case); otherwise it becomes `part<partId>-<name>`. Kept names that already
-    look like such a prefix are prefixed too, so they can't collide with a generated one.
-    """
-    base = {p.part_id: safe_filename(p.filename, f"part{p.part_id}", p.mime_type) for p in parts}
-    counts: dict[str, int] = {}
-    for name in base.values():
-        counts[name.casefold()] = counts.get(name.casefold(), 0) + 1
-    return {
-        pid: name if counts[name.casefold()] == 1 and not _PREFIXED_NAME_RE.match(name)
-        else f"part{pid}-{name}"
-        for pid, name in base.items()
-    }
+    """Map each partId to its on-disk name, `part<partId>.<ext>`, so none of the sender's filename
+    goes into the path. Only leaf parts are listed, so no partId extends another (`1` and `1.2`)
+    and the names are distinct."""
+    for p in parts:
+        if not _PART_ID_RE.fullmatch(p.part_id):
+            raise GmailError(f"Unexpected partId from Gmail: {p.part_id[:40]!r}")
+    names = {p.part_id: attachment_name(f"part{p.part_id}", p.filename, p.mime_type) for p in parts}
+    if len(set(names.values())) != len(names):
+        raise GmailError("Gmail returned attachment parts whose saved names would clash")
+    return names
