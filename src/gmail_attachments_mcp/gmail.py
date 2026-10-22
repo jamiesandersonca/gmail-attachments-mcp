@@ -8,7 +8,8 @@ import re
 from dataclasses import dataclass
 from urllib.parse import quote
 
-from google.auth.exceptions import RefreshError
+import requests
+from google.auth.exceptions import RefreshError, TransportError
 
 from .auth import AuthError
 from .files import (
@@ -27,6 +28,8 @@ TIMEOUT = 60
 _HEX_ID_RE = re.compile(r"[0-9a-f]{1,32}")
 _ATTACHMENT_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
 _PART_ID_RE = re.compile(r"[\d.]*")
+# 403 reasons that mean "slow down", not "not allowed".
+_RATE_LIMIT_REASONS = {"rateLimitExceeded", "userRateLimitExceeded", "dailyLimitExceeded"}
 
 
 class NotFound(ValueError):
@@ -69,14 +72,27 @@ class Downloader:
             raise AuthError(
                 f"Gmail token could not be refreshed ({e}). Run `gmail-attachments-mcp auth` again."
             ) from e
+        except (requests.RequestException, TransportError) as e:
+            raise GmailError(f"Couldn't reach Gmail ({type(e).__name__}); check the connection "
+                             "and try again") from e
         if r.status_code in (400, 404):
             raise NotFound(f"{what} not found")
+        reasons, message = _error_details(r)
+        if r.status_code == 429 or reasons & _RATE_LIMIT_REASONS:
+            raise GmailError(f"Gmail rate limit reached fetching {what}; wait a minute and try again")
+        if "accessNotConfigured" in reasons:
+            # Google's message names the project and links to where the API is enabled.
+            raise GmailError(f"The Gmail API isn't enabled for this OAuth client's project: {message}")
         if r.status_code in (401, 403):
             raise AuthError(f"Gmail refused access ({r.status_code}). Run "
                             "`gmail-attachments-mcp auth` with the account the connector uses.")
         if r.status_code >= 300:
-            raise GmailError(f"Gmail API error {r.status_code} fetching {what}")
+            detail = f": {message}" if message else ""
+            raise GmailError(f"Gmail API error {r.status_code} fetching {what}{detail}")
         return r.json()
+
+    def profile(self) -> dict:
+        return self._get("profile", "Gmail profile")
 
     def list_parts(self, message_id: str) -> list[Part]:
         msg = self._get(f"messages/{message_id}", f"Message {message_id}",
@@ -104,11 +120,15 @@ class Downloader:
     def _fetch(self, message_id: str, attachment_id: str) -> bytes:
         att = self._get(f"messages/{message_id}/attachments/{quote(attachment_id, safe='')}",
                         f"Attachment in message {message_id}")
-        return _b64(att.get("data", ""))
+        if "data" not in att:
+            raise GmailError(f"Gmail returned no data for an attachment in message {message_id}")
+        return _b64(att["data"])
 
     def _data(self, message_id: str, part: Part) -> bytes:
         if part.data is not None:
             return _b64(part.data)
+        if part.attachment_id is None:
+            return b""  # an empty attachment: Gmail sends only {"size": 0}
         return self._fetch(message_id, part.attachment_id)
 
     def download(self, message_id: str, attachment_id: str | None = None) -> dict:
@@ -157,7 +177,8 @@ class Downloader:
                         prefetched: dict[str, bytes]) -> list[Part]:
         """Gmail issues a new attachment ID on every fetch of a message, so an ID the connector
         returned earlier rarely matches ours. It still downloads, though; identify which part it
-        is by size."""
+        is by content, checking parts of the same size first. An ID for something we don't list
+        matches nothing, rather than being saved under some other part's name."""
         valid = ", ".join(f"{p.part_id} ({p.filename or 'unnamed'})" for p in all_parts)
         not_found = NotFound(f"Attachment {attachment_id[:40]} not found in message {message_id} "
                              f"(parts with attachments: {valid}). Pass a partId instead.")
@@ -167,14 +188,26 @@ class Downloader:
             data = self._fetch(message_id, attachment_id)
         except NotFound:
             raise not_found from None
-        candidates = [p for p in all_parts if p.size == len(data)] or all_parts
-        if len(candidates) > 1:
-            # Several parts of that size: compare contents to find which one this is.
-            candidates = [p for p in candidates if self._data(message_id, p) == data][:1]
-        if not candidates:
+        # Same-size parts are the likely match, but a size match alone isn't proof, and Gmail's
+        # size can be off, so the others are checked too.
+        by_size = sorted(all_parts, key=lambda p: p.size != len(data))
+        match = next((p for p in by_size if self._data(message_id, p) == data), None)
+        if match is None:
             raise not_found
-        prefetched[candidates[0].part_id] = data
-        return candidates
+        prefetched[match.part_id] = data
+        return [match]
+
+
+def _error_details(r) -> tuple[set[str], str]:
+    """The reasons and message from a Google API error body (written by Google, not a sender)."""
+    try:
+        error = r.json().get("error") or {}
+    except ValueError:
+        return set(), ""
+    if not isinstance(error, dict):
+        return set(), ""
+    reasons = {e.get("reason") for e in error.get("errors") or [] if isinstance(e, dict)}
+    return reasons, str(error.get("message") or "")[:300]
 
 
 def _b64(s: str) -> bytes:

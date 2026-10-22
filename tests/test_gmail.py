@@ -6,13 +6,16 @@ import sys
 
 import pytest
 
+import requests
+
 from gmail_attachments_mcp import files
+from gmail_attachments_mcp.auth import AuthError
 from gmail_attachments_mcp.files import QuarantineError, attachment_name, is_quarantined
 from gmail_attachments_mcp.gmail import (
     GmailError, NotFound, Part, _attachment_names, normalize_message_id,
 )
 
-from .conftest import CSV, CSV2, PDF, PNG
+from .conftest import CSV, CSV2, PDF, PNG, Response
 
 INVOICE = "1a0000000000000a"
 MULTI = "1a0000000000000b"
@@ -92,6 +95,74 @@ def test_stale_id_for_one_of_several_same_size_parts_is_matched_by_content(downl
     stale = session.issue_id(MULTI, "2")
     (att,) = downloader.download(MULTI, stale)["attachments"]
     assert att["partId"] == "2" and _read(att) == CSV2
+
+
+def test_stale_id_for_an_unlisted_part_is_not_saved_as_another(downloader, session):
+    # e.g. an attached email we don't list; with one listed part, sizes alone can't rule it out.
+    (att,) = downloader.download(INVOICE, "1")["attachments"]
+    with pytest.raises(NotFound, match="Pass a partId instead"):
+        downloader.download(INVOICE, session.issue_unlisted_id(b"an attached email, not the PDF"))
+    assert _read(att) == PDF
+
+
+def test_stale_id_for_an_unlisted_part_of_the_same_size_is_not_saved_as_another(
+        downloader, session):
+    impostor = b"X" * len(PDF)
+    (att,) = downloader.download(INVOICE, "1")["attachments"]
+    with pytest.raises(NotFound, match="Pass a partId instead"):
+        downloader.download(INVOICE, session.issue_unlisted_id(impostor))
+    assert _read(att) == PDF
+
+
+def test_stale_id_whose_size_matches_no_part_is_matched_by_content(downloader, session, monkeypatch):
+    stale = session.issue_id(INVOICE, "1")
+    original = downloader.list_parts
+    monkeypatch.setattr(downloader, "list_parts", lambda m: [
+        Part(p.part_id, p.filename, p.mime_type, p.size + 1, p.attachment_id, p.data)
+        for p in original(m)])
+    (att,) = downloader.download(INVOICE, stale)["attachments"]
+    assert att["partId"] == "1" and _read(att) == PDF
+
+
+def test_empty_attachment_is_saved_as_an_empty_file(downloader):
+    atts = downloader.download("1a0000000000000d")["attachments"]
+    assert [(a["partId"], a["size"]) for a in atts] == [("1", 0), ("2", len(PDF))]
+    assert _read(atts[0]) == b"" and _read(atts[1]) == PDF
+
+
+def test_attachment_without_data_is_an_error(downloader, session, monkeypatch):
+    get = session.get
+    monkeypatch.setattr(session, "get", lambda url, **kw: (
+        Response(200, {"size": len(PDF)}) if "/attachments/" in url else get(url, **kw)))
+    with pytest.raises(GmailError, match="no data"):
+        downloader.download(INVOICE, "1")
+
+
+def _google_error(status, reason, message="Google says no"):
+    return Response(status, {"error": {"code": status, "message": message,
+                                       "errors": [{"reason": reason, "message": message}]}})
+
+
+@pytest.mark.parametrize(
+    "failure, error, match",
+    [
+        (_google_error(403, "rateLimitExceeded"), GmailError, "rate limit reached"),
+        (_google_error(403, "userRateLimitExceeded"), GmailError, "rate limit reached"),
+        (Response(429), GmailError, "rate limit reached"),
+        (_google_error(403, "accessNotConfigured", "Gmail API has not been used in project 1"),
+         GmailError, "isn't enabled .*project 1"),
+        (_google_error(403, "insufficientPermissions"), AuthError, "Run `gmail-attachments-mcp auth`"),
+        (Response(401), AuthError, "Run `gmail-attachments-mcp auth`"),
+        (Response(403), AuthError, "Run `gmail-attachments-mcp auth`"),
+        (_google_error(500, "backendError", "Backend Error"), GmailError, "error 500 .*Backend Error"),
+        (requests.ConnectionError("dns failed"), GmailError, r"Couldn't reach Gmail \(ConnectionError\)"),
+        (requests.Timeout(), GmailError, r"Couldn't reach Gmail \(Timeout\)"),
+    ],
+)
+def test_gmail_failures_say_what_went_wrong(downloader, session, failure, error, match):
+    session.fail = failure
+    with pytest.raises(error, match=match):
+        downloader.download(INVOICE, "1")
 
 
 def test_download_all_attachments(downloader):

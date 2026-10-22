@@ -9,7 +9,7 @@ import os
 import sys
 
 from .auth import DEFAULT_CLIENT_SECRET, DEFAULT_TOKEN, LazySession, authorize, load_session
-from .gmail import API, DEFAULT_ATTACHMENTS_DIR, Downloader
+from .gmail import DEFAULT_ATTACHMENTS_DIR, Downloader
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -39,8 +39,7 @@ def main(argv: list[str] | None = None) -> None:
     try:
         if args.cmd == "auth":
             authorize(args.client_secret, args.token)
-            session = load_session(args.token)
-            email = session.get(f"{API}/profile", timeout=30).json().get("emailAddress")
+            email = Downloader(load_session(args.token)).profile().get("emailAddress")
             print(f"Authorized {email}. Token saved to {os.path.expanduser(args.token)}")
             return
 

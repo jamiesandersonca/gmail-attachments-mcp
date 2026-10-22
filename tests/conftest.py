@@ -46,6 +46,12 @@ MESSAGES = {
     ]},
     "1a0000000000000c": {"mimeType": "text/plain", "partId": "", "filename": "",
                          "body": {"size": 2, "data": b64(b"no")}},
+    # An empty attachment: Gmail sends neither data nor an attachment ID.
+    "1a0000000000000d": {"mimeType": "multipart/mixed", "partId": "", "parts": [
+        {"partId": "0", "mimeType": "text/plain", "filename": "", "body": {"size": 2, "data": b64(b"hi")}},
+        {"partId": "1", "mimeType": "text/plain", "filename": "empty.txt", "body": {"size": 0}},
+        leaf("2", "invoice.pdf", "application/pdf", PDF),
+    ]},
 }
 
 
@@ -65,6 +71,7 @@ class FakeSession:
         self.calls = []
         self._fetch = itertools.count(1)
         self._issued: dict[str, bytes] = {}
+        self.fail = None  # a Response to return, or an exception to raise, for every call
 
     def issue_id(self, message_id, part_id) -> str:
         """An attachment ID as an earlier connector call would have seen it."""
@@ -73,9 +80,21 @@ class FakeSession:
         self._issued[aid] = part["_data"]
         return aid
 
+    def issue_unlisted_id(self, data: bytes) -> str:
+        """An attachment ID for data that isn't one of the parts the message lists."""
+        aid = f"OLD{next(self._fetch)}xunlisted"
+        self._issued[aid] = data
+        return aid
+
     def get(self, url, params=None, timeout=None):
         self.calls.append(url)
+        if isinstance(self.fail, Exception):
+            raise self.fail
+        if self.fail:
+            return self.fail
         path = url.removeprefix(API + "/").split("/")
+        if path == ["profile"]:
+            return Response(200, {"emailAddress": "me@example.com"})
         if path[0] != "messages" or path[1] not in MESSAGES:
             return Response(404)
         message = MESSAGES[path[1]]
