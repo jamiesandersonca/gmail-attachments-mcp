@@ -47,6 +47,12 @@ your PATH (in `~/.local/bin`), in its own isolated environment, independent of a
 uv tool install git+https://github.com/jamiesandersonca/gmail-attachments-mcp
 ```
 
+Always install from this git URL. The name `gmail-attachments-mcp` on PyPI belongs to an
+unrelated project, so `uv tool install gmail-attachments-mcp` or `uvx gmail-attachments-mcp`
+without the URL installs someone else's code. That project also keeps its token at
+`~/.config/gmail-attachments-mcp/token.json`, so it would pick up the token this tool saves,
+which can read all your mail.
+
 Upgrade later with `uv tool upgrade gmail-attachments-mcp`. When working on the code, install
 from your checkout instead so edits take effect immediately:
 `uv tool install --editable /path/to/gmail-attachments-mcp`.
