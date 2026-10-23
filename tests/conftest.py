@@ -13,6 +13,7 @@ PDF = b"%PDF-1.4 fake invoice"
 CSV = b"date,amount\n2026-01-01,12.50\n"
 CSV2 = b"date,amount\n2026-02-01,99.99\n"
 PNG = b"\x89PNG fake image"
+EML = b"From: shop@example.com\r\nSubject: Your receipt\r\n\r\n(the forwarded message)\r\n"
 
 
 def b64(data: bytes) -> str:
@@ -51,6 +52,19 @@ MESSAGES = {
         {"partId": "0", "mimeType": "text/plain", "filename": "", "body": {"size": 2, "data": b64(b"hi")}},
         {"partId": "1", "mimeType": "text/plain", "filename": "empty.txt", "body": {"size": 0}},
         leaf("2", "invoice.pdf", "application/pdf", PDF),
+    ]},
+    # A forwarded email attached as .eml, itself carrying a PDF: Gmail gives the message/rfc822
+    # part its own attachment ID and also lists the parts inside it. The named multipart inside
+    # has no data of its own, so it isn't an attachment.
+    "1a0000000000000e": {"mimeType": "multipart/mixed", "partId": "", "parts": [
+        {"partId": "0", "mimeType": "text/plain", "filename": "", "body": {"size": 2, "data": b64(b"fw")}},
+        {**leaf("1", "Your receipt.eml", "message/rfc822", EML), "parts": [
+            {"partId": "1.0", "mimeType": "multipart/mixed", "filename": "noname", "body": {"size": 0}, "parts": [
+                {"partId": "1.0.0", "mimeType": "text/plain", "filename": "",
+                 "body": {"size": 7, "data": b64(b"receipt")}},
+                leaf("1.0.1", "receipt.pdf", "application/pdf", PDF),
+            ]},
+        ]},
     ]},
 }
 

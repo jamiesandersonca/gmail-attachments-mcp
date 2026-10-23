@@ -15,10 +15,11 @@ from gmail_attachments_mcp.gmail import (
     GmailError, NotFound, Part, _attachment_names, normalize_message_id,
 )
 
-from .conftest import CSV, CSV2, PDF, PNG, Response
+from .conftest import CSV, CSV2, EML, PDF, PNG, Response
 
 INVOICE = "1a0000000000000a"
 MULTI = "1a0000000000000b"
+FORWARDED = "1a0000000000000e"
 
 
 def _read(entry):
@@ -163,6 +164,15 @@ def test_gmail_failures_say_what_went_wrong(downloader, session, failure, error,
     session.fail = failure
     with pytest.raises(error, match=match):
         downloader.download(INVOICE, "1")
+
+
+def test_attached_email_and_the_attachments_inside_it_are_both_listed(downloader, session):
+    atts = downloader.download(FORWARDED)["attachments"]
+    assert [(a["partId"], os.path.basename(a["path"])) for a in atts] == [
+        ("1", "part1.eml"), ("1.0.1", "part1.0.1.pdf")]
+    assert [_read(a) for a in atts] == [EML, PDF]
+    (att,) = downloader.download(FORWARDED, session.issue_id(FORWARDED, "1"))["attachments"]
+    assert att["partId"] == "1" and _read(att) == EML
 
 
 def test_download_all_attachments(downloader):

@@ -101,10 +101,12 @@ class Downloader:
         stack = [msg.get("payload") or {}]
         while stack:
             p = stack.pop()
-            if p.get("parts"):
-                stack.extend(reversed(p["parts"]))
-                continue
+            # An attached email (message/rfc822) has an attachment ID of its own as well as
+            # parts; like the connector, list it and the attachments inside it.
+            stack.extend(reversed(p.get("parts") or []))
             body = p.get("body") or {}
+            if p.get("parts") and not body.get("attachmentId"):
+                continue  # a multipart container; its data is in its parts
             if not p.get("filename") and not body.get("attachmentId"):
                 continue  # a body part, not an attachment
             parts.append(Part(
@@ -216,8 +218,9 @@ def _b64(s: str) -> bytes:
 
 def _attachment_names(parts: list[Part]) -> dict[str, str]:
     """Map each partId to its on-disk name, `part<partId>.<ext>`, so none of the sender's filename
-    goes into the path. Only leaf parts are listed, so no partId extends another (`1` and `1.2`)
-    and the names are distinct."""
+    goes into the path. An attached email is listed along with the parts inside it, so names
+    could in principle clash (`part1` with extension `0`, and an extensionless `part1.0`); that
+    fails the download rather than saving one file over the other."""
     for p in parts:
         if not _PART_ID_RE.fullmatch(p.part_id):
             raise GmailError(f"Unexpected partId from Gmail: {p.part_id[:40]!r}")
