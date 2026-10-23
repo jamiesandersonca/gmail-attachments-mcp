@@ -3,6 +3,7 @@ import stat
 import sys
 
 import pytest
+from google.oauth2.credentials import Credentials
 
 from gmail_attachments_mcp import auth
 from gmail_attachments_mcp.auth import AuthError, LazySession
@@ -73,3 +74,45 @@ def test_token_save_replaces_a_symlink_instead_of_following_it(tmp_path):
     assert victim.read_text() == "precious"
     assert not token.is_symlink() and token.read_text() == '{"token": "new"}'
     assert [p.name for p in tmp_path.iterdir() if p.name.endswith(".tmp")] == []
+
+
+class _Flow:
+    def __init__(self, refresh_token):
+        self.refresh_token = refresh_token
+        self.kwargs = None
+
+    def run_local_server(self, **kwargs):
+        self.kwargs = kwargs
+        return Credentials(token="access", refresh_token=self.refresh_token, client_id="id",
+                           client_secret="secret", token_uri="https://oauth2.googleapis.com/token")
+
+
+@pytest.fixture
+def flow(monkeypatch):
+    from google_auth_oauthlib.flow import InstalledAppFlow
+
+    def use(refresh_token):
+        f = _Flow(refresh_token)
+        monkeypatch.setattr(InstalledAppFlow, "from_client_secrets_file",
+                            classmethod(lambda cls, path, scopes: f))
+        return f
+
+    return use
+
+
+def test_auth_asks_for_consent_so_a_refresh_token_is_issued(tmp_path, flow):
+    secret = tmp_path / "client_secret.json"
+    secret.write_text("{}")
+    f = flow("refresh")
+    auth.authorize(str(secret), str(tmp_path / "token.json"))
+    assert f.kwargs["prompt"] == "consent"
+    assert '"refresh_token": "refresh"' in (tmp_path / "token.json").read_text()
+
+
+def test_token_without_a_refresh_token_is_not_saved(tmp_path, flow):
+    secret = tmp_path / "client_secret.json"
+    secret.write_text("{}")
+    flow(None)
+    with pytest.raises(AuthError, match="didn't return a refresh token"):
+        auth.authorize(str(secret), str(tmp_path / "token.json"))
+    assert not (tmp_path / "token.json").exists()

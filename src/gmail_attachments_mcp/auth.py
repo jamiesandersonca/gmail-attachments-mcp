@@ -31,7 +31,12 @@ def authorize(client_secret: str, token_path: str) -> Credentials:
             "Google Cloud Console and download its JSON there (see README)."
         )
     flow = InstalledAppFlow.from_client_secrets_file(client_secret, SCOPES)
-    creds = flow.run_local_server(port=0, open_browser=True)
+    # Without prompt=consent, Google can leave out the refresh token when the account has
+    # consented before, which is every re-run of `auth`; the token would then die within an hour.
+    creds = flow.run_local_server(port=0, open_browser=True, prompt="consent")
+    if not creds.refresh_token:
+        raise AuthError("Google didn't return a refresh token, so the token wasn't saved. Run "
+                        "`gmail-attachments-mcp auth` again.")
     _save(creds, token_path)
     return creds
 
