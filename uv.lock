@@ -424,7 +424,7 @@ wheels = [
 
 [[package]]
 name = "gmail-attachments-mcp"
-version = "0.1.7"
+version = "0.1.8"
 source = { editable = "." }
 dependencies = [
     { name = "google-auth", extra = ["requests"] },

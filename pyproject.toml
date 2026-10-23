@@ -1,6 +1,6 @@
 [project]
 name = "gmail-attachments-mcp"
-version = "0.1.7"
+version = "0.1.8"
 description = "Local MCP server that downloads Gmail attachments, to complement the Gmail connector"
 readme = "README.md"
 requires-python = ">=3.10"
