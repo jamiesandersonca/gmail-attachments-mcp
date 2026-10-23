@@ -175,6 +175,40 @@ def test_attached_email_and_the_attachments_inside_it_are_both_listed(downloader
     assert att["partId"] == "1" and _read(att) == EML
 
 
+@pytest.mark.parametrize(
+    "failures, expected_waits",
+    [
+        ([Response(429)], [1]),
+        ([_google_error(403, "userRateLimitExceeded"), Response(503)], [1, 2]),
+        ([requests.ConnectionError("reset")], [1]),
+        ([Response(429, headers={"Retry-After": "5"})], [5]),
+        ([Response(429, headers={"Retry-After": "120"})], [10]),
+        ([Response(429, headers={"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"})], [1]),
+    ],
+)
+def test_transient_failures_are_retried_with_backoff(downloader, session, waits, failures,
+                                                     expected_waits):
+    session.failures = failures
+    (att,) = downloader.download(INVOICE, "1")["attachments"]
+    assert _read(att) == PDF and waits == expected_waits
+
+
+def test_retries_give_up_after_three_attempts(downloader, session, waits):
+    session.fail = Response(503)
+    with pytest.raises(GmailError, match="error 503"):
+        downloader.download(INVOICE, "1")
+    assert len(session.calls) == 3 and waits == [1, 2]
+
+
+@pytest.mark.parametrize("failure", [
+    _google_error(403, "insufficientPermissions"), Response(401), requests.Timeout()])
+def test_other_failures_are_not_retried(downloader, session, waits, failure):
+    session.fail = failure
+    with pytest.raises(ValueError):
+        downloader.download(INVOICE, "1")
+    assert len(session.calls) == 1 and waits == []
+
+
 def test_download_all_attachments(downloader):
     atts = downloader.download(MULTI)["attachments"]
     assert [a["partId"] for a in atts] == ["1", "2", "3", "4"]

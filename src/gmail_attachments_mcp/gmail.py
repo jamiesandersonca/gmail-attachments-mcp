@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import os
 import re
+import time
 from dataclasses import dataclass
 from urllib.parse import quote
 
@@ -24,6 +25,9 @@ from .files import (
 API = "https://gmail.googleapis.com/gmail/v1/users/me"
 DEFAULT_ATTACHMENTS_DIR = "~/.cache/gmail-attachments-mcp/attachments"
 TIMEOUT = 60
+# Gmail asks clients to retry rate limits and server errors with exponential backoff.
+ATTEMPTS = 3
+MAX_WAIT = 10
 
 _HEX_ID_RE = re.compile(r"[0-9a-f]{1,32}")
 _ATTACHMENT_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
@@ -38,6 +42,14 @@ class NotFound(ValueError):
 
 class GmailError(ValueError):
     pass
+
+
+class TransientError(GmailError):
+    """A failure worth retrying: a rate limit, a Gmail server error or a dropped connection."""
+
+    def __init__(self, message: str, retry_after: float = 0.0):
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 @dataclass
@@ -66,20 +78,33 @@ class Downloader:
         self.attachments_dir = os.path.expanduser(attachments_dir or DEFAULT_ATTACHMENTS_DIR)
 
     def _get(self, path: str, what: str, **params) -> dict:
+        for attempt in range(ATTEMPTS - 1):
+            try:
+                return self._get_once(path, what, params)
+            except TransientError as e:
+                time.sleep(min(max(e.retry_after, 2 ** attempt), MAX_WAIT))
+        return self._get_once(path, what, params)
+
+    def _get_once(self, path: str, what: str, params: dict) -> dict:
         try:
             r = self.session.get(f"{API}/{path}", params=params, timeout=TIMEOUT)
         except RefreshError as e:
             raise AuthError(
                 f"Gmail token could not be refreshed ({e}). Run `gmail-attachments-mcp auth` again."
             ) from e
-        except (requests.RequestException, TransportError) as e:
+        except (requests.ConnectionError, TransportError) as e:
+            # A slow read isn't retried: each attempt can already take TIMEOUT seconds.
+            raise TransientError(f"Couldn't reach Gmail ({type(e).__name__}); check the "
+                                 "connection and try again") from e
+        except requests.RequestException as e:
             raise GmailError(f"Couldn't reach Gmail ({type(e).__name__}); check the connection "
                              "and try again") from e
         if r.status_code in (400, 404):
             raise NotFound(f"{what} not found")
         reasons, message = _error_details(r)
         if r.status_code == 429 or reasons & _RATE_LIMIT_REASONS:
-            raise GmailError(f"Gmail rate limit reached fetching {what}; wait a minute and try again")
+            raise TransientError(f"Gmail rate limit reached fetching {what}; wait a minute and "
+                                 "try again", _retry_after(r))
         if "accessNotConfigured" in reasons:
             # Google's message names the project and links to where the API is enabled.
             raise GmailError(f"The Gmail API isn't enabled for this OAuth client's project: {message}")
@@ -88,7 +113,8 @@ class Downloader:
                             "`gmail-attachments-mcp auth` with the account the connector uses.")
         if r.status_code >= 300:
             detail = f": {message}" if message else ""
-            raise GmailError(f"Gmail API error {r.status_code} fetching {what}{detail}")
+            error = TransientError if r.status_code >= 500 else GmailError
+            raise error(f"Gmail API error {r.status_code} fetching {what}{detail}")
         return r.json()
 
     def profile(self) -> dict:
@@ -210,6 +236,14 @@ def _error_details(r) -> tuple[set[str], str]:
         return set(), ""
     reasons = {e.get("reason") for e in error.get("errors") or [] if isinstance(e, dict)}
     return reasons, str(error.get("message") or "")[:300]
+
+
+def _retry_after(r) -> float:
+    """Seconds from a Retry-After header; the HTTP-date form is ignored."""
+    try:
+        return max(float(r.headers.get("Retry-After") or 0), 0.0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _b64(s: str) -> bytes:

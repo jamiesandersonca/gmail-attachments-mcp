@@ -7,6 +7,7 @@ import itertools
 
 import pytest
 
+from gmail_attachments_mcp import gmail
 from gmail_attachments_mcp.gmail import API, Downloader
 
 PDF = b"%PDF-1.4 fake invoice"
@@ -70,9 +71,10 @@ MESSAGES = {
 
 
 class Response:
-    def __init__(self, status_code, payload=None):
+    def __init__(self, status_code, payload=None, headers=None):
         self.status_code = status_code
         self._payload = payload or {}
+        self.headers = headers or {}
 
     def json(self):
         return self._payload
@@ -86,6 +88,7 @@ class FakeSession:
         self._fetch = itertools.count(1)
         self._issued: dict[str, bytes] = {}
         self.fail = None  # a Response to return, or an exception to raise, for every call
+        self.failures = []  # the same, but each used once, before any `fail`
 
     def issue_id(self, message_id, part_id) -> str:
         """An attachment ID as an earlier connector call would have seen it."""
@@ -102,10 +105,11 @@ class FakeSession:
 
     def get(self, url, params=None, timeout=None):
         self.calls.append(url)
-        if isinstance(self.fail, Exception):
-            raise self.fail
-        if self.fail:
-            return self.fail
+        failure = self.failures.pop(0) if self.failures else self.fail
+        if isinstance(failure, Exception):
+            raise failure
+        if failure:
+            return failure
         path = url.removeprefix(API + "/").split("/")
         if path == ["profile"]:
             return Response(200, {"emailAddress": "me@example.com"})
@@ -136,6 +140,14 @@ def _find(part, part_id):
         if found := _find(p, part_id):
             return found
     return None
+
+
+@pytest.fixture(autouse=True)
+def waits(monkeypatch):
+    """Retries record how long they would wait instead of sleeping."""
+    waits = []
+    monkeypatch.setattr(gmail.time, "sleep", waits.append)
+    return waits
 
 
 @pytest.fixture
