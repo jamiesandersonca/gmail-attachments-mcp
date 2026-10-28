@@ -123,6 +123,26 @@ claude mcp add gmail-attachments --scope user -- gmail-attachments-mcp serve
 
 Restart Claude Code after `uv tool upgrade` so it starts the new version.
 
+## Use with Claude Desktop
+
+Add the server to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "gmail-attachments": {
+      "command": "/Users/<you>/.local/bin/gmail-attachments-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+Use the full path, because apps opened from the Dock don't get your shell's PATH. If the file
+already has an `mcpServers` section, add the entry to it. Quit the app (⌘Q) and reopen it to load
+the server, and do the same after `uv tool upgrade`. Enable the Gmail connector in the app too,
+since it finds the messages this tool downloads from.
+
 ## CLI
 
 ```sh
