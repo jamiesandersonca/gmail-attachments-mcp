@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import errno
 import json
 import mimetypes
 import os
@@ -50,15 +51,16 @@ def index_json(filenames: dict[str, str | None]) -> bytes:
 
 def quarantine(fd: int) -> None:
     """Mark a saved file as downloaded, as Mail does, so macOS checks it (Gatekeeper) before it
-    opens. Raises QuarantineError where the filesystem can't hold the mark, rather than leaving
-    the file unprotected."""
+    opens. A filesystem that can't hold the mark leaves the file unmarked; any other failure raises
+    QuarantineError, since a disk that does support the mark should never give an unmarked file."""
     if sys.platform == "darwin":
         value = f"0081;{int(time.time()):08x};{_AGENT};".encode()
         if _libc.fsetxattr(fd, _QUARANTINE, value, len(value), 0, 0) != 0:
-            raise QuarantineError(
-                f"Couldn't quarantine the saved attachment ({os.strerror(ctypes.get_errno())}). "
-                "Choose an --attachments-dir on a disk that supports extended attributes."
-            )
+            err = ctypes.get_errno()
+            if err not in (errno.ENOTSUP, errno.EOPNOTSUPP):
+                raise QuarantineError(
+                    f"Couldn't quarantine the saved attachment ({os.strerror(err)})."
+                )
 
 
 def is_quarantined(fd: int) -> bool:

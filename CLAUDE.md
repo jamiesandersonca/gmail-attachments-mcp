@@ -30,7 +30,8 @@ uv run gmail-attachments-mcp serve              # MCP over stdio
   then by content.
 - **`files.py`**: private-directory, symlink-safe, atomic file writes.
   Saved names are `part<partId>.<ext>`; the sender's filename never reaches the path (it goes in
-  `filenames.json`). Quarantine failure raises rather than leaving a file unmarked.
+  `filenames.json`). A disk that can't hold the quarantine mark gets an unmarked file; any other
+  quarantine failure raises.
 - **`server.py`**: thin MCP layer; `ValueError` subclasses become `ToolError`.
 - **`cli.py`**: stdout carries MCP traffic, so logging goes to stderr.
 

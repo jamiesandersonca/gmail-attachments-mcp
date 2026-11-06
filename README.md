@@ -31,8 +31,9 @@ gives the original name, and `filenames.json` in the same folder maps each saved
 Repeat requests reuse the saved file when its contents still match.
 
 On macOS each file is quarantined like a Mail attachment, so Gatekeeper checks it before it
-opens. If the attachments directory is on a disk that can't hold the quarantine mark, the
-download fails rather than saving an unmarked file.
+opens. If the attachments directory is on a disk that can't hold the quarantine mark, the file
+is saved without it, so Gatekeeper won't check it. Any other failure to set the mark fails the
+download.
 
 ## Install
 

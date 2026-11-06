@@ -1,3 +1,5 @@
+import ctypes
+import errno
 import json
 import os
 import stat
@@ -228,17 +230,36 @@ def test_index_lists_every_part_with_its_original_name(downloader):
         }
 
 
-@pytest.mark.skipif(sys.platform != "darwin", reason="quarantine is a macOS attribute")
-def test_unmarkable_file_is_not_saved(downloader, monkeypatch):
-    class NoXattrs:
+def _fail_quarantine(monkeypatch, error):
+    class FailingXattrs:
         fgetxattr = files._libc.fgetxattr
 
         @staticmethod
         def fsetxattr(*args):
+            ctypes.set_errno(error)
             return -1
 
-    monkeypatch.setattr(files, "_libc", NoXattrs)
-    with pytest.raises(QuarantineError, match="--attachments-dir"):
+    monkeypatch.setattr(files, "_libc", FailingXattrs)
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="quarantine is a macOS attribute")
+@pytest.mark.parametrize("error", [errno.ENOTSUP, errno.EOPNOTSUPP])
+def test_disk_without_quarantine_support_saves_unmarked(downloader, monkeypatch, error):
+    _fail_quarantine(monkeypatch, error)
+    for _ in range(2):  # A repeat request can't find a marked copy, and must still succeed.
+        (att,) = downloader.download(INVOICE, "1")["attachments"]
+        assert _read(att) == PDF
+    fd = os.open(att["path"], os.O_RDONLY)
+    try:
+        assert not is_quarantined(fd)
+    finally:
+        os.close(fd)
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="quarantine is a macOS attribute")
+def test_other_quarantine_failure_saves_nothing(downloader, monkeypatch):
+    _fail_quarantine(monkeypatch, errno.EIO)
+    with pytest.raises(QuarantineError, match="Couldn't quarantine"):
         downloader.download(INVOICE, "1")
     msg_dir = os.path.join(os.path.realpath(downloader.attachments_dir), INVOICE)
     assert os.listdir(msg_dir) == []
