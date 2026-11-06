@@ -1,7 +1,4 @@
-"""Saving attachments to a private directory without following planted symlinks or FIFOs.
-
-Adapted from gmail-takeout-mcp so both servers save files the same way.
-"""
+"""Saving attachments to a private directory without following planted symlinks or FIFOs."""
 
 from __future__ import annotations
 

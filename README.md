@@ -5,9 +5,6 @@ Gmail account to local files. The Gmail connector can search mail and list attac
 can't fetch them. This server fills that gap, and you keep using the connector for everything
 else.
 
-It is the live-mail counterpart of the `download_attachment` tool in gmail-takeout-mcp (a
-companion server for Google Takeout archives), and it saves files the same way.
-
 ## How it fits with the connector
 
 1. `search_threads` (connector), e.g. `has:attachment filename:pdf from:hotel`

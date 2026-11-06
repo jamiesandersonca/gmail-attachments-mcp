@@ -6,9 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A local MCP server with a single tool, `download_attachment(messageId, attachmentId?)`, that saves
 attachments from the user's live Gmail account (Gmail API, `gmail.readonly`) to local files. It
-complements the Gmail connector, which can list attachments but not fetch them. Its sibling project
-`gmail-takeout-mcp` has the same tool over a Takeout archive; keep the two tools' behaviour and file
-handling consistent. `README.md` documents setup and user-facing behaviour; keep it in sync.
+complements the Gmail connector, which can list attachments but not fetch them. `README.md` documents
+setup and user-facing behaviour; keep it in sync.
 
 ## Commands
 
@@ -29,7 +28,7 @@ uv run gmail-attachments-mcp serve              # MCP over stdio
   every `messages.get`**, so an ID from the connector won't match. `attachmentId` therefore accepts a
   `partId` (stable, preferred). An unmatched ID is fetched directly and mapped to a part by size,
   then by content.
-- **`files.py`**: private-directory, symlink-safe, atomic file writes (copied from gmail-takeout-mcp).
+- **`files.py`**: private-directory, symlink-safe, atomic file writes.
   Saved names are `part<partId>.<ext>`; the sender's filename never reaches the path (it goes in
   `filenames.json`). Quarantine failure raises rather than leaving a file unmarked.
 - **`server.py`**: thin MCP layer; `ValueError` subclasses become `ToolError`.
