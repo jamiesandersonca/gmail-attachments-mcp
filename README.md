@@ -1,9 +1,13 @@
 # gmail-attachments-mcp
 
 A local MCP server with one tool, `download_attachment`. It saves attachments from your live
-Gmail account to local files. The Gmail connector can search mail and list attachments, but it
-can't fetch them. This server fills that gap, and you keep using the connector for everything
-else.
+Gmail account to local files. You keep using the Gmail connector for everything else.
+
+The connector now has its own `download_gmail_attachment` tool, which is enough for reading an
+attachment in a conversation. This server is still useful when you want the files themselves:
+they are saved to one folder that stays put between sessions, one call can save every attachment
+of a message, it takes the short `partId` instead of the connector's long attachment ID, and
+there is no 12 MB limit.
 
 ## How it fits with the connector
 

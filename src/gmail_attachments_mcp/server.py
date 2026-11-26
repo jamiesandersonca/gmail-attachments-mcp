@@ -8,9 +8,16 @@ from typing import Annotated, Optional
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import BeforeValidator, Field, WithJsonSchema
 
 from .gmail import Downloader
+
+
+def _id_as_text(value):
+    """Accept a bare number such as 1 for an ID: clients may send a numeric-looking partId unquoted."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    return value
 
 # Writes files under the attachments directory, but never changes the mailbox.
 SAVES_FILES = ToolAnnotations(
@@ -19,7 +26,7 @@ SAVES_FILES = ToolAnnotations(
 
 INSTRUCTIONS = """\
 Companion to the Gmail connector: saves attachments from the user's live Gmail account to local
-files, which the connector cannot do. Find messages with the connector's `search_threads`, read
+files that stay put between sessions. Find messages with the connector's `search_threads`, read
 `attachments` from its `get_message` or `get_thread`, then call `download_attachment` with the
 message ID and the attachment's `partId` (or its `id`). It is read-only towards Gmail.
 
@@ -52,6 +59,10 @@ def build_server(downloader: Downloader) -> MCPServer:
                                                     "the attachment, as returned by the Gmail connector.")],
         attachmentId: Annotated[
             Optional[str],
+            BeforeValidator(_id_as_text),
+            # A plain string type, not anyOf string/null: without a top-level type, clients may
+            # send a partId such as "1" as the number 1.
+            WithJsonSchema({"type": "string"}),
             Field(description="Optional. The attachment's `partId` (e.g. `1`, preferred) or its `id` "
                               "from the message's `attachments`. Omit to save every attachment "
                               "of the message."),
@@ -59,8 +70,9 @@ def build_server(downloader: Downloader) -> MCPServer:
     ) -> dict:
         """Saves a Gmail attachment to a local file and returns its path.
 
-        The Gmail connector lists attachments but cannot fetch them; this tool fills that gap.
-        Find attachments with the connector's `search_threads` (e.g. `has:attachment
+        Use it when the files themselves are needed on disk: they stay in one place between
+        sessions, a single call can save every attachment of a message, and there is no size
+        limit. Find attachments with the connector's `search_threads` (e.g. `has:attachment
         filename:pdf`), take the `partId` from the `attachments` of `get_message` or `get_thread`,
         then call this tool. The response lists each saved file's `path`, `filename`, `mimeType`,
         `partId` and `size` in bytes; open the path with a file-reading tool to analyse the

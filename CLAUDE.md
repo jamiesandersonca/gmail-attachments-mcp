@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A local MCP server with a single tool, `download_attachment(messageId, attachmentId?)`, that saves
 attachments from the user's live Gmail account (Gmail API, `gmail.readonly`) to local files. It
-complements the Gmail connector, which can list attachments but not fetch them. `README.md` documents
-setup and user-facing behaviour; keep it in sync.
+complements the Gmail connector, whose own `download_gmail_attachment` keeps files only per session
+and caps them at 12 MB. `README.md` documents setup and user-facing behaviour; keep it in sync.
 
 ## Commands
 

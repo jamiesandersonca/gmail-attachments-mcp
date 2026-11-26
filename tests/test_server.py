@@ -41,6 +41,19 @@ def test_tool_call_saves_file(downloader):
         assert f.read() == PDF
 
 
+def test_attachment_id_is_published_as_a_string(downloader):
+    (tool,) = asyncio.run(build_server(downloader).list_tools())
+    assert tool.input_schema["properties"]["attachmentId"]["type"] == "string"
+
+
+def test_numeric_part_id_is_accepted(downloader):
+    result = _call(downloader, "download_attachment",
+                   {"messageId": "1a0000000000000a", "attachmentId": 1})
+    assert not result.is_error, _text(result)
+    (att,) = json.loads(_text(result))["attachments"]
+    assert att["partId"] == "1"
+
+
 def test_user_errors_surface_their_message(downloader):
     result = _call(downloader, "download_attachment",
                    {"messageId": "1a0000000000000a", "attachmentId": "7"})
